@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { getClient } from '../lib/client.js';
 import { TWEET_FIELDS, TWEET_EXPANSIONS, USER_FIELDS, MEDIA_FIELDS } from '../lib/fields.js';
 import { mergeIncludes, printJson } from '../lib/output.js';
-import { getLastSynced, updateLastSynced } from '../lib/sync-state.js';
+import { getLastId, updateLastSynced } from '../lib/sync-state.js';
 
 export function makeBookmarksCommand(): Command {
   const bookmarks = new Command('bookmarks')
@@ -19,13 +19,12 @@ export function makeBookmarksCommand(): Command {
         const limit = options.all ? 800 : parseInt(options.limit, 10);
         const perPage = Math.min(limit, 100);
 
-        // Load sync cutoff (skip if --all)
-        let syncCutoff: Date | null = null;
+        // Load last seen bookmark ID (skip if --all)
+        let lastSeenId: string | null = null;
         if (!options.all) {
-          const lastSynced = await getLastSynced('bookmarks');
-          if (lastSynced) {
-            syncCutoff = new Date(lastSynced);
-            console.error(`Fetching bookmarks since last sync: ${lastSynced}`);
+          lastSeenId = await getLastId('bookmarks');
+          if (lastSeenId) {
+            console.error(`Fetching bookmarks until last seen ID: ${lastSeenId}`);
           }
         }
 
@@ -49,14 +48,11 @@ export function makeBookmarksCommand(): Command {
             break;
           }
 
-          // Filter out tweets older than sync cutoff
+          const countBefore = allData.length;
           for (const tweet of result.data.data) {
-            if (syncCutoff && tweet.created_at) {
-              const tweetDate = new Date(tweet.created_at);
-              if (tweetDate <= syncCutoff) {
-                hitOldBookmarks = true;
-                break;
-              }
+            if (lastSeenId && tweet.id === lastSeenId) {
+              hitOldBookmarks = true;
+              break;
             }
             allData.push(tweet);
           }
@@ -75,9 +71,9 @@ export function makeBookmarksCommand(): Command {
           meta: { result_count: allData.length },
         });
 
-        // Update sync state (skip when --all to preserve incremental cursor)
-        if (!options.all) {
-          await updateLastSynced('bookmarks', syncTimestamp);
+        // Update sync state with the first (newest) bookmark ID
+        if (!options.all && allData.length > 0) {
+          await updateLastSynced('bookmarks', syncTimestamp, allData[0].id);
           console.error(`Sync state updated: ${syncTimestamp}`);
         }
       } catch (err: any) {

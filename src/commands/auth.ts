@@ -10,16 +10,14 @@ export function makeAuthCommand(): Command {
     .command('login')
     .description('Authenticate with X via OAuth 2.0 PKCE')
     .option('--client-id <id>', 'X app client ID')
-    .option('--client-secret <secret>', 'X app client secret')
     .action(async (options) => {
-      let clientId = options.clientId ?? process.env.X_CLIENT_ID;
-      let clientSecret = options.clientSecret ?? process.env.X_CLIENT_SECRET;
+      let { clientId } = options;
+      let clientSecret: string | undefined;
 
       // Interactive setup if credentials not provided
       if (!clientId || !clientSecret) {
         console.error('X API credentials not found. Let\'s set them up.');
-        console.error('Get your credentials from https://developer.x.com/en/portal/dashboard');
-        console.error('Tip: set X_CLIENT_ID and X_CLIENT_SECRET env vars to avoid storing secrets on disk.\n');
+        console.error('Get your credentials from https://developer.x.com/en/portal/dashboard\n');
       }
 
       if (!clientId) {

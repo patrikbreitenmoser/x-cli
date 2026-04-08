@@ -4,6 +4,7 @@ import { CONFIG_DIR, ensureConfigDir } from './config.js';
 
 interface SyncEntry {
   lastSyncedAt: string;
+  lastId?: string;
 }
 
 interface SyncState {
@@ -32,8 +33,13 @@ export async function getLastSynced(type: 'tweets' | 'bookmarks'): Promise<strin
   return state[type]?.lastSyncedAt ?? null;
 }
 
-export async function updateLastSynced(type: 'tweets' | 'bookmarks', isoTimestamp: string): Promise<void> {
+export async function updateLastSynced(type: 'tweets' | 'bookmarks', isoTimestamp: string, lastId?: string): Promise<void> {
   const state = await loadSyncState();
-  state[type] = { lastSyncedAt: isoTimestamp };
+  state[type] = { lastSyncedAt: isoTimestamp, ...(lastId ? { lastId } : {}) };
   await saveSyncState(state);
+}
+
+export async function getLastId(type: 'tweets' | 'bookmarks'): Promise<string | null> {
+  const state = await loadSyncState();
+  return state[type]?.lastId ?? null;
 }

@@ -11,13 +11,8 @@ export function makeFollowsCommand(): Command {
     .argument('<usernames...>', 'usernames to add')
     .action(async (usernames: string[]) => {
       const added = await addFollows(usernames);
-      if (added.length > 0) {
-        console.error(`Added: ${added.join(', ')}`);
-      } else {
-        console.error('All usernames already in follow list.');
-      }
       const all = await loadFollows();
-      console.error(`Follow list: ${all.length} accounts`);
+      printJson({ added, follows: all, count: all.length });
     });
 
   follows
@@ -26,13 +21,8 @@ export function makeFollowsCommand(): Command {
     .argument('<usernames...>', 'usernames to remove')
     .action(async (usernames: string[]) => {
       const removed = await removeFollows(usernames);
-      if (removed.length > 0) {
-        console.error(`Removed: ${removed.join(', ')}`);
-      } else {
-        console.error('None of those usernames were in the follow list.');
-      }
       const all = await loadFollows();
-      console.error(`Follow list: ${all.length} accounts`);
+      printJson({ removed, follows: all, count: all.length });
     });
 
   follows

@@ -1,6 +1,7 @@
 import { TwitterApi } from 'twitter-api-v2';
 import { OAuth2 } from '@xdevplatform/xdk';
 import { loadTokens, saveTokens, isExpired, type StoredTokens } from './token-store.js';
+import { CALLBACK_URL, SCOPES } from './auth-flow.js';
 
 export async function getClient(): Promise<TwitterApi> {
   const tokens = await loadTokens();
@@ -15,12 +16,11 @@ export async function getClient(): Promise<TwitterApi> {
 
   // Refresh the token using the official X SDK
   try {
-    const clientSecret = tokens.clientSecret ?? process.env.X_CLIENT_SECRET;
     const oauth2 = new OAuth2({
       clientId: tokens.clientId,
-      clientSecret,
-      redirectUri: 'http://localhost:3000/callback',
-      scope: ['bookmark.read', 'tweet.read', 'users.read', 'offline.access'],
+      clientSecret: tokens.clientSecret,
+      redirectUri: CALLBACK_URL,
+      scope: SCOPES,
     });
 
     const newToken = await oauth2.refreshToken(tokens.refreshToken);
@@ -34,8 +34,9 @@ export async function getClient(): Promise<TwitterApi> {
     };
     await saveTokens(updated);
     return new TwitterApi(newToken.access_token);
-  } catch {
-    console.error('Error: Session expired. Run `x-cli auth login` to re-authenticate.');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: Token refresh failed (${msg}). Run \`x-cli auth login\` to re-authenticate.`);
     process.exit(1);
   }
 }
