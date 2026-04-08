@@ -1,6 +1,6 @@
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CONFIG_DIR } from './config.js';
+import { CONFIG_DIR, ensureConfigDir } from './config.js';
 
 export interface StoredTokens {
   clientId: string;
@@ -22,7 +22,7 @@ export async function loadTokens(): Promise<StoredTokens | null> {
 }
 
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
+  await ensureConfigDir();
   await writeFile(CREDENTIALS_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
 }
 

@@ -35,9 +35,10 @@ export async function runAuthFlow(clientId: string, clientSecret?: string): Prom
 
       const error = reqUrl.searchParams.get('error');
       if (error) {
-        res.writeHead(400);
-        res.end(`Authorization failed: ${error}`);
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Authorization failed. Check the terminal for details.');
         server.close();
+        console.error(`Authorization error from X: ${error}`);
         reject(new Error(`Authorization failed: ${error}`));
         return;
       }
@@ -66,7 +67,7 @@ export async function runAuthFlow(clientId: string, clientSecret?: string): Prom
       resolve(authCode);
     });
 
-    server.listen(CALLBACK_PORT, () => {
+    server.listen(CALLBACK_PORT, '127.0.0.1', () => {
       console.error(`\nOpen this URL in your browser to authorize:\n\n  ${authUrl}\n`);
       console.error(`Waiting for authorization on http://localhost:${CALLBACK_PORT}/callback ...\n`);
 

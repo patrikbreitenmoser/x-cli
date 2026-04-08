@@ -15,9 +15,10 @@ export async function getClient(): Promise<TwitterApi> {
 
   // Refresh the token using the official X SDK
   try {
+    const clientSecret = tokens.clientSecret ?? process.env.X_CLIENT_SECRET;
     const oauth2 = new OAuth2({
       clientId: tokens.clientId,
-      clientSecret: tokens.clientSecret,
+      clientSecret,
       redirectUri: 'http://localhost:3000/callback',
       scope: ['bookmark.read', 'tweet.read', 'users.read', 'offline.access'],
     });

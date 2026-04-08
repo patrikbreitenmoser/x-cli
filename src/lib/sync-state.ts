@@ -1,6 +1,6 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CONFIG_DIR } from './config.js';
+import { CONFIG_DIR, ensureConfigDir } from './config.js';
 
 interface SyncEntry {
   lastSyncedAt: string;
@@ -23,8 +23,8 @@ async function loadSyncState(): Promise<SyncState> {
 }
 
 async function saveSyncState(state: SyncState): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(SYNC_STATE_FILE, JSON.stringify(state, null, 2));
+  await ensureConfigDir();
+  await writeFile(SYNC_STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
 }
 
 export async function getLastSynced(type: 'tweets' | 'bookmarks'): Promise<string | null> {

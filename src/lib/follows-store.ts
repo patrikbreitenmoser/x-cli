@@ -1,6 +1,6 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CONFIG_DIR } from './config.js';
+import { CONFIG_DIR, ensureConfigDir } from './config.js';
 
 const FOLLOWS_FILE = join(CONFIG_DIR, 'follows.json');
 
@@ -14,8 +14,8 @@ export async function loadFollows(): Promise<string[]> {
 }
 
 async function saveFollows(follows: string[]): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(FOLLOWS_FILE, JSON.stringify(follows, null, 2));
+  await ensureConfigDir();
+  await writeFile(FOLLOWS_FILE, JSON.stringify(follows, null, 2), { mode: 0o600 });
 }
 
 export async function addFollows(usernames: string[]): Promise<string[]> {
