@@ -1,4 +1,4 @@
-import { Command, Option } from 'commander';
+import { Command } from 'commander';
 import { input, password } from '@inquirer/prompts';
 import { loadTokens, deleteTokens } from '../lib/token-store.js';
 import { runAuthFlow } from '../lib/auth-flow.js';
@@ -9,12 +9,8 @@ export function makeAuthCommand(): Command {
   auth
     .command('login')
     .description('Authenticate with X via OAuth 2.0 PKCE')
-    .addOption(
-      new Option('--client-id <id>', 'X app client ID').env('X_CLIENT_ID')
-    )
-    .addOption(
-      new Option('--client-secret <secret>', 'X app client secret').env('X_CLIENT_SECRET')
-    )
+    .option('--client-id <id>', 'X app client ID')
+    .option('--client-secret <secret>', 'X app client secret')
     .action(async (options) => {
       let { clientId, clientSecret } = options;
 

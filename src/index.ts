@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import 'dotenv/config';
 import { Command } from 'commander';
 import { makeAuthCommand } from './commands/auth.js';
 import { makeUserCommand } from './commands/user.js';
@@ -31,9 +30,7 @@ Examples:
   $ x-cli follows list
   $ x-cli tweets                        # fetches new tweets for all follows
 
-Environment variables (or .env file):
-  X_CLIENT_ID      Your X app client ID
-  X_CLIENT_SECRET  Your X app client secret
+Credentials are stored in ~/.x-cli/credentials.json after login.
 `);
 
 program.addCommand(makeAuthCommand());
