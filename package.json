@@ -1,14 +1,39 @@
 {
-  "name": "x-cli",
+  "name": "@patrikbreitenmoser/x-cli",
   "version": "1.0.0",
   "description": "CLI tool for querying the X (Twitter) API v2",
   "type": "module",
+  "license": "MIT",
+  "author": "Patrik Breitenmoser",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrikbreitenmoser/x-cli.git"
+  },
+  "homepage": "https://github.com/patrikbreitenmoser/x-cli#readme",
+  "bugs": {
+    "url": "https://github.com/patrikbreitenmoser/x-cli/issues"
+  },
+  "keywords": [
+    "x",
+    "twitter",
+    "cli",
+    "api",
+    "tweets",
+    "bookmarks"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist"
+  ],
   "bin": {
-    "x-cli": "./dist/index.js"
+    "x-cli": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts"
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.1",
