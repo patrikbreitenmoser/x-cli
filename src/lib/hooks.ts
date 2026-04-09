@@ -42,6 +42,18 @@ export async function ensureManagedHooksInstalled(executablePath: string = getEx
   return { codex, claude };
 }
 
+export async function uninstallManagedHooks(): Promise<{
+  codex: HookInstallStatus;
+  claude: HookInstallStatus;
+}> {
+  const [codex, claude] = await Promise.all([
+    uninstallCodexHooks(),
+    uninstallClaudeHooks(),
+  ]);
+
+  return { codex, claude };
+}
+
 export async function getManagedHookStatus(executablePath: string = getExecutablePath()): Promise<Record<string, unknown>> {
   const codexPath = join(CODEX_DIR, 'hooks.json');
   const claudePath = join(CLAUDE_DIR, 'settings.json');
@@ -90,6 +102,31 @@ async function installCodexHooks(executablePath: string): Promise<HookInstallSta
   };
 }
 
+async function uninstallCodexHooks(): Promise<HookInstallStatus> {
+  const hooksPath = join(CODEX_DIR, 'hooks.json');
+  const configPath = join(CODEX_DIR, 'config.toml');
+
+  const hooksFile = await readJsonFile<HooksFile>(hooksPath, {});
+  const original = JSON.stringify(hooksFile);
+  hooksFile.hooks = hooksFile.hooks ?? {};
+  hooksFile.hooks.SessionStart = removeManagedSessionStartHooks(hooksFile.hooks.SessionStart ?? [], 'codex');
+  cleanupHooksFile(hooksFile);
+  await writeJsonIfChanged(hooksPath, hooksFile, original);
+
+  const configText = await readTextFile(configPath);
+  const nextConfig = disableCodexHooks(configText);
+  if (nextConfig !== configText) {
+    await writeText(configPath, nextConfig);
+  }
+
+  return {
+    app: 'codex',
+    config_path: hooksPath,
+    installed: false,
+    updated: JSON.stringify(hooksFile) !== original || nextConfig !== configText,
+  };
+}
+
 async function installClaudeHooks(executablePath: string): Promise<HookInstallStatus> {
   const settingsPath = join(CLAUDE_DIR, 'settings.json');
   const settings = await readJsonFile<Record<string, unknown>>(settingsPath, {});
@@ -109,6 +146,31 @@ async function installClaudeHooks(executablePath: string): Promise<HookInstallSt
   };
 }
 
+async function uninstallClaudeHooks(): Promise<HookInstallStatus> {
+  const settingsPath = join(CLAUDE_DIR, 'settings.json');
+  const settings = await readJsonFile<Record<string, unknown>>(settingsPath, {});
+  const original = JSON.stringify(settings);
+  const hooks = isRecord(settings.hooks) ? settings.hooks as Record<string, unknown> : {};
+
+  hooks.SessionStart = removeManagedSessionStartHooks(readHooksArray({ hooks }, 'SessionStart'), 'claude');
+  if (Array.isArray(hooks.SessionStart) && hooks.SessionStart.length === 0) {
+    delete hooks.SessionStart;
+  }
+  settings.hooks = hooks;
+  if (Object.keys(hooks).length === 0) {
+    delete settings.hooks;
+  }
+
+  await writeJsonIfChanged(settingsPath, settings, original);
+
+  return {
+    app: 'claude',
+    config_path: settingsPath,
+    installed: false,
+    updated: JSON.stringify(settings) !== original,
+  };
+}
+
 function upsertSessionStartHook(
   existingHooks: HookMatcher[],
   app: ManagedApp,
@@ -117,6 +179,10 @@ function upsertSessionStartHook(
   const filtered = existingHooks.filter((entry) => !hasManagedHook([entry], app));
   const managed = buildManagedSessionStartHook(app, executablePath);
   return [...filtered, managed];
+}
+
+function removeManagedSessionStartHooks(existingHooks: HookMatcher[], app: ManagedApp): HookMatcher[] {
+  return existingHooks.filter((entry) => !hasManagedHook([entry], app));
 }
 
 function buildManagedSessionStartHook(app: ManagedApp, executablePath: string): HookMatcher {
@@ -189,6 +255,19 @@ export function enableCodexHooks(configText: string): string {
   return `${trimmed.length > 0 ? `${trimmed}\n\n` : ''}[features]\ncodex_hooks = true\n`;
 }
 
+export function disableCodexHooks(configText: string): string {
+  if (/^\s*codex_hooks\s*=\s*false\s*$/m.test(configText)) {
+    return configText;
+  }
+
+  if (/^\s*codex_hooks\s*=\s*true\s*$/m.test(configText)) {
+    const replaced = configText.replace(/^\s*codex_hooks\s*=\s*true\s*$/m, 'codex_hooks = false');
+    return replaced.endsWith('\n') ? replaced : `${replaced}\n`;
+  }
+
+  return configText;
+}
+
 async function readJsonFile<T>(path: string, fallback: T): Promise<T> {
   try {
     const raw = await readFile(path, 'utf-8');
@@ -212,6 +291,22 @@ async function writeJsonIfChanged(path: string, value: unknown, previousSerializ
     return;
   }
   await writeText(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function cleanupHooksFile(hooksFile: HooksFile): void {
+  if (!hooksFile.hooks) {
+    return;
+  }
+
+  for (const [eventName, entries] of Object.entries(hooksFile.hooks)) {
+    if (Array.isArray(entries) && entries.length === 0) {
+      delete hooksFile.hooks[eventName];
+    }
+  }
+
+  if (Object.keys(hooksFile.hooks).length === 0) {
+    delete hooksFile.hooks;
+  }
 }
 
 async function writeText(path: string, value: string): Promise<void> {

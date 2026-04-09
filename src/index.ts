@@ -7,7 +7,7 @@ import { makeTweetsCommand } from './commands/tweets.js';
 import { makeFollowsCommand } from './commands/follows.js';
 import { ensureCliError, usageError } from './lib/errors.js';
 import { buildHomeOutput } from './lib/home.js';
-import { ensureManagedHooksInstalled, getManagedHookStatus } from './lib/hooks.js';
+import { ensureManagedHooksInstalled, getManagedHookStatus, uninstallManagedHooks } from './lib/hooks.js';
 import { printError, runCommand, setOutputFormat } from './lib/output.js';
 
 const program = new Command();
@@ -58,13 +58,6 @@ applyCommanderDefaults(program);
 
 setOutputFormat(detectRequestedFormat(process.argv.slice(2)));
 
-if (process.env.X_CLI_DISABLE_AUTO_HOOKS !== '1' && !isHookEmitterInvocation(process.argv.slice(2))) {
-  await ensureManagedHooksInstalled().catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`x-cli: failed to install managed hooks (${message})`);
-  });
-}
-
 try {
   validateCliArgs(process.argv.slice(2));
   await program.parseAsync(process.argv);
@@ -99,6 +92,11 @@ function makeHooksCommand(): Command {
     .command('install')
     .description('Install or repair Codex and Claude session-start hooks')
     .action(runCommand(async () => ensureManagedHooksInstalled()));
+
+  hooks
+    .command('uninstall')
+    .description('Remove managed Codex and Claude session-start hooks')
+    .action(runCommand(async () => uninstallManagedHooks()));
 
   hooks
     .command('status')

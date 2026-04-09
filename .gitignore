@@ -4,3 +4,6 @@ dist/
 .env
 .context
 docs/
+.agents/
+.omx/
+skills-lock.json

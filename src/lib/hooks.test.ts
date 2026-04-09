@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { enableCodexHooks } from './hooks.js';
+import { disableCodexHooks, enableCodexHooks } from './hooks.js';
 
 describe('enableCodexHooks', () => {
   it('appends a features section when one does not exist', () => {
@@ -21,6 +21,22 @@ describe('enableCodexHooks', () => {
     assert.equal(
       enableCodexHooks('[features]\ncodex_hooks = false\n'),
       '[features]\ncodex_hooks = true\n',
+    );
+  });
+});
+
+describe('disableCodexHooks', () => {
+  it('flips codex_hooks from true to false', () => {
+    assert.equal(
+      disableCodexHooks('[features]\ncodex_hooks = true\n'),
+      '[features]\ncodex_hooks = false\n',
+    );
+  });
+
+  it('leaves unrelated config unchanged when no codex_hooks key exists', () => {
+    assert.equal(
+      disableCodexHooks('[features]\nmulti_agent = true\n'),
+      '[features]\nmulti_agent = true\n',
     );
   });
 });

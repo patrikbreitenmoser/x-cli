@@ -149,11 +149,12 @@ Most list commands now default to compact fields. Use `--fields <name,...>` or `
 
 ## Hooks
 
-`x-cli` installs or repairs Codex and Claude session-start hooks automatically on invocation so agents can start with a compact dashboard. You can also manage this explicitly:
+`x-cli` can install managed Codex and Claude session-start hooks if you want agents to start with a compact dashboard. Hook changes are explicit:
 
 ```sh
 x-cli hooks status
 x-cli hooks install
+x-cli hooks uninstall
 ```
 
 ## Data Storage
