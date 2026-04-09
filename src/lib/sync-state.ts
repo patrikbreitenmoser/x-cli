@@ -2,12 +2,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CONFIG_DIR, ensureConfigDir } from './config.js';
 
-interface SyncEntry {
+export interface SyncEntry {
   lastSyncedAt: string;
   lastId?: string;
 }
 
-interface SyncState {
+export interface SyncState {
   tweets?: SyncEntry;
   bookmarks?: SyncEntry;
 }
@@ -21,6 +21,10 @@ async function loadSyncState(): Promise<SyncState> {
   } catch {
     return {};
   }
+}
+
+export async function getSyncState(): Promise<SyncState> {
+  return loadSyncState();
 }
 
 async function saveSyncState(state: SyncState): Promise<void> {

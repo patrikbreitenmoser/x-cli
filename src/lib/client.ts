@@ -2,12 +2,18 @@ import { TwitterApi } from 'twitter-api-v2';
 import { OAuth2 } from '@xdevplatform/xdk';
 import { loadTokens, saveTokens, isExpired, type StoredTokens } from './token-store.js';
 import { CALLBACK_URL, SCOPES } from './auth-flow.js';
+import { runtimeError } from './errors.js';
 
 export async function getClient(): Promise<TwitterApi> {
   const tokens = await loadTokens();
   if (!tokens) {
-    console.error('Error: Not logged in. Run `x-cli auth login` first.');
-    process.exit(1);
+    throw runtimeError('Not logged in.', {
+      code: 'AUTH_REQUIRED',
+      help: [
+        'Run `x-cli auth login` to authenticate using credentials from `~/.x-cli/credentials.json`.',
+        'Run `x-cli auth status` to inspect stored credentials.',
+      ],
+    });
   }
 
   if (!isExpired(tokens)) {
@@ -36,7 +42,12 @@ export async function getClient(): Promise<TwitterApi> {
     return new TwitterApi(newToken.access_token);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Error: Token refresh failed (${msg}). Run \`x-cli auth login\` to re-authenticate.`);
-    process.exit(1);
+    throw runtimeError('Token refresh failed.', {
+      code: 'AUTH_REFRESH_FAILED',
+      diagnostic: `Token refresh failed (${msg}).`,
+      help: [
+        'Run `x-cli auth login` to re-authenticate using credentials from `~/.x-cli/credentials.json`.',
+      ],
+    });
   }
 }

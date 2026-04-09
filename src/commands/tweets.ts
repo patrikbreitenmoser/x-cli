@@ -1,23 +1,16 @@
 import { Command } from 'commander';
 import { getClient } from '../lib/client.js';
 import { TWEET_FIELDS, TWEET_EXPANSIONS, USER_FIELDS, MEDIA_FIELDS } from '../lib/fields.js';
-import { mergeIncludes, printJson } from '../lib/output.js';
+import { mergeIncludes, runCommand } from '../lib/output.js';
 import { loadFollows } from '../lib/follows-store.js';
 import { getLastSynced, updateLastSynced } from '../lib/sync-state.js';
+import { parseRequestedFields, summarizeTweet } from '../lib/presenters.js';
+import { CliError, runtimeError, usageError } from '../lib/errors.js';
 
-async function resolveUserId(client: any, target: string): Promise<{ id: string; username: string }> {
-  if (/^\d+$/.test(target)) {
-    return { id: target, username: target };
-  }
-
-  const result = await client.v2.userByUsername(target, { 'user.fields': ['id'] });
-  if (!result.data) {
-    throw new Error(`User not found: ${target}`);
-  }
-  return { id: result.data.id, username: result.data.username };
-}
-
-async function resolveUserIds(client: any, targets: string[]): Promise<Array<{ id: string; username: string }>> {
+async function resolveUserIds(
+  client: any,
+  targets: string[],
+): Promise<{ users: Array<{ id: string; username: string }>; missing: string[] }> {
   const ids: Array<{ id: string; username: string }> = [];
   const usernamesToResolve: string[] = [];
 
@@ -30,30 +23,33 @@ async function resolveUserIds(client: any, targets: string[]): Promise<Array<{ i
   }
 
   if (usernamesToResolve.length === 1) {
-    const resolved = await resolveUserId(client, usernamesToResolve[0]);
-    ids.push(resolved);
-  } else if (usernamesToResolve.length > 1) {
+    const result = await client.v2.userByUsername(usernamesToResolve[0], { 'user.fields': ['id'] });
+    if (result.data) {
+      ids.push({ id: result.data.id, username: result.data.username });
+      return { users: ids, missing: [] };
+    }
+    return { users: ids, missing: usernamesToResolve };
+  }
+
+  if (usernamesToResolve.length > 1) {
     const result = await client.v2.usersByUsernames(usernamesToResolve, { 'user.fields': ['id'] });
     if (result.data) {
       for (const user of result.data) {
         ids.push({ id: user.id, username: user.username });
       }
     }
-    const foundNames = new Set(result.data?.map((u: any) => u.username.toLowerCase()) ?? []);
-    for (const name of usernamesToResolve) {
-      if (!foundNames.has(name.toLowerCase())) {
-        console.error(`Warning: User not found: ${name}`);
-      }
-    }
+    const foundNames = new Set(result.data?.map((user: any) => user.username.toLowerCase()) ?? []);
+    const missing = usernamesToResolve.filter((name) => !foundNames.has(name.toLowerCase()));
+    return { users: ids, missing };
   }
 
-  return ids;
+  return { users: ids, missing: [] };
 }
 
 async function fetchUserTweets(
   client: any,
   userId: string,
-  options: { limit: number; since?: string; until?: string; exclude?: string[] }
+  options: { limit: number; since?: string; until?: string; exclude?: string[] },
 ): Promise<{ data: any[]; includes: any }> {
   const allData: any[] = [];
   let includes: any = {};
@@ -82,22 +78,24 @@ async function fetchUserTweets(
       params.pagination_token = nextToken;
     }
     params.max_results = Math.min(100, options.limit - allData.length);
-    if (params.max_results < 5) params.max_results = 5;
+    if (params.max_results < 5) {
+      params.max_results = 5;
+    }
 
     const result = await client.v2.userTimeline(userId, params);
-
     if (!result.data?.data || result.data.data.length === 0) {
       break;
     }
 
     allData.push(...result.data.data);
-
     if (result.data.includes) {
       includes = mergeIncludes(includes, result.data.includes as any);
     }
 
     nextToken = result.data.meta?.next_token;
-    if (!nextToken) break;
+    if (!nextToken) {
+      break;
+    }
   }
 
   return {
@@ -115,103 +113,150 @@ export function makeTweetsCommand(): Command {
     .option('--until <date>', 'tweets until date (YYYY-MM-DD or ISO 8601)')
     .option('--no-replies', 'exclude replies')
     .option('--no-retweets', 'exclude retweets')
-    .action(async (targets: string[], options) => {
+    .option('--fields <fields>', 'comma-separated additional fields to include')
+    .option('--full', 'include the full default tweet detail set')
+    .action(runCommand(async (targets: string[], options) => {
       const client = await getClient();
       const limit = parseInt(options.limit, 10);
+      const requestedFields = parseRequestedFields(options.fields, options.full, ['id', 'author', 'created_at', 'text']);
 
-      // Determine if we're using the follows list
+      if (!Number.isInteger(limit) || limit <= 0) {
+        throw usageError('`--limit` must be a positive integer.', {
+          code: 'INVALID_LIMIT',
+          help: ['Run `x-cli tweets <username> --limit 20`.'],
+        });
+      }
+
+      if (options.since && isNaN(Date.parse(options.since))) {
+        throw usageError('`--since` must be a valid date.', {
+          code: 'INVALID_SINCE_DATE',
+          help: ['Run `x-cli tweets <username> --since 2026-01-01`.'],
+        });
+      }
+      if (options.until && isNaN(Date.parse(options.until))) {
+        throw usageError('`--until` must be a valid date.', {
+          code: 'INVALID_UNTIL_DATE',
+          help: ['Run `x-cli tweets <username> --until 2026-01-31`.'],
+        });
+      }
+
       let useFollowsList = targets.length === 0;
       if (useFollowsList) {
         const follows = await loadFollows();
         if (follows.length === 0) {
-          console.error('Error: No targets given and follow list is empty.');
-          console.error('Add accounts with: x-cli follows add <usernames...>');
-          process.exit(1);
+          throw runtimeError('No targets were provided and the follow list is empty.', {
+            code: 'EMPTY_FOLLOW_LIST',
+            help: [
+              'Run `x-cli follows add <username...>` to seed your follow list.',
+              'Or run `x-cli tweets <username...>` with explicit targets.',
+            ],
+          });
         }
         targets = follows;
-        console.error(`Using follow list: ${follows.join(', ')}`);
       }
 
-      // Validate dates
-      if (options.since && isNaN(Date.parse(options.since))) {
-        console.error(`Error: Invalid date for --since: ${options.since}`);
-        process.exit(1);
-      }
-      if (options.until && isNaN(Date.parse(options.until))) {
-        console.error(`Error: Invalid date for --until: ${options.until}`);
-        process.exit(1);
-      }
-
-      // For follows list: use sync state as --since default
       let sinceDate = options.since;
       if (useFollowsList && !sinceDate) {
         const lastSynced = await getLastSynced('tweets');
         if (lastSynced) {
           sinceDate = lastSynced;
-          console.error(`Fetching tweets since last sync: ${lastSynced}`);
         }
       }
 
       const exclude: string[] = [];
-      if (options.replies === false) exclude.push('replies');
-      if (options.retweets === false) exclude.push('retweets');
+      if (options.replies === false) {
+        exclude.push('replies');
+      }
+      if (options.retweets === false) {
+        exclude.push('retweets');
+      }
 
-      // Record sync time before fetching
       const syncTimestamp = new Date().toISOString();
 
       try {
-        const users = await resolveUserIds(client, targets);
-
-        if (users.length === 0) {
-          console.error('Error: No valid users found.');
-          process.exit(1);
+        const resolved = await resolveUserIds(client, targets);
+        if (resolved.users.length === 0) {
+          return {
+            count: 0,
+            targets: [] as unknown[],
+            missing: resolved.missing,
+            help: [
+              'Run `x-cli tweets <username...>` with existing X handles.',
+            ],
+          };
         }
 
-        if (users.length === 1) {
-          const result = await fetchUserTweets(client, users[0].id, {
+        const targetResults: Array<Record<string, unknown>> = [];
+
+        for (const user of resolved.users) {
+          const result = await fetchUserTweets(client, user.id, {
             limit,
             since: sinceDate,
             until: options.until,
             exclude,
           });
+          const usersById = new Map<string, string>((result.includes.users ?? []).map((entry: any) => [String(entry.id), String(entry.username)]));
+          const items = result.data.map((tweet) => summarizeTweet(tweet, {
+            requestedFields,
+            author: usersById.get(tweet.author_id) ?? user.username,
+          }));
 
-          printJson({
-            user: users[0].username,
-            ...result,
-            meta: { result_count: result.data.length },
+          targetResults.push({
+            user: user.username,
+            user_id: user.id,
+            count: items.length,
+            tweets: items,
           });
-        } else {
-          const results: Record<string, any> = {};
-
-          for (const user of users) {
-            console.error(`Fetching tweets for @${user.username} ...`);
-            const result = await fetchUserTweets(client, user.id, {
-              limit,
-              since: sinceDate,
-              until: options.until,
-              exclude,
-            });
-
-            results[user.username] = {
-              userId: user.id,
-              ...result,
-              meta: { result_count: result.data.length },
-            };
-          }
-
-          printJson(results);
         }
 
-        // Update sync state after successful fetch
         if (useFollowsList) {
           await updateLastSynced('tweets', syncTimestamp);
-          console.error(`Sync state updated: ${syncTimestamp}`);
         }
-      } catch (err: any) {
-        console.error(`Error fetching tweets: ${err.message}`);
-        process.exit(1);
+
+        if (targetResults.length === 1) {
+          return {
+            user: targetResults[0].user,
+            user_id: targetResults[0].user_id,
+            count: targetResults[0].count,
+            tweets: targetResults[0].tweets,
+            ...(resolved.missing.length > 0 ? { missing: resolved.missing } : {}),
+            sync: {
+              source: useFollowsList ? 'follow_list' : 'explicit_targets',
+              since: sinceDate ?? 'none',
+              until: options.until ?? 'none',
+              updated_at: useFollowsList ? syncTimestamp : 'unchanged',
+            },
+          };
+        }
+
+        return {
+          count: targetResults.reduce((sum, entry) => sum + Number(entry.count ?? 0), 0),
+          targets: targetResults,
+          ...(resolved.missing.length > 0 ? { missing: resolved.missing } : {}),
+          sync: {
+            source: useFollowsList ? 'follow_list' : 'explicit_targets',
+            since: sinceDate ?? 'none',
+            until: options.until ?? 'none',
+            updated_at: useFollowsList ? syncTimestamp : 'unchanged',
+          },
+          help: targetResults.length > 0
+            ? ['Run `x-cli tweets <username> --full` to inspect expanded tweet details for a single target.']
+            : ['Run `x-cli follows add <username...>` to seed the follow list used by bare `x-cli tweets`.'],
+        };
+      } catch (err) {
+        if (err instanceof CliError) {
+          throw err;
+        }
+        throw runtimeError('Failed to fetch tweets.', {
+          code: 'TWEETS_FETCH_FAILED',
+          diagnostic: err instanceof Error ? err.message : String(err),
+          help: [
+            'Run `x-cli auth status` to confirm your credentials are still valid.',
+            'Run `x-cli tweets <username> --limit 20` with existing X handles.',
+          ],
+        });
       }
-    });
+    }));
 
   return tweets;
 }
