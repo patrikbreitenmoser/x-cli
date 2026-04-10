@@ -6,8 +6,14 @@ import { runtimeError, usageError } from '../lib/errors.js';
 
 export function makeAuthCommand(): Command {
   const auth = new Command('auth').description('Manage authentication');
+  auth.addHelpText('after', `
+Examples:
+  $ x-cli auth login
+  $ x-cli auth login --client-secret YOUR_CLIENT_SECRET
+  $ x-cli auth status
+`);
 
-  auth
+  const login = auth
     .command('login')
     .description('Authenticate with X via OAuth 2.0 PKCE')
     .option('--client-secret <secret>', 'X app client secret')
@@ -41,8 +47,14 @@ export function makeAuthCommand(): Command {
         throw mapAuthLoginError(error, { hasClientSecret: Boolean(clientSecret) });
       }
     }));
+  login.addHelpText('after', `
+Examples:
+  $ x-cli auth login
+  $ x-cli auth login --client-secret YOUR_CLIENT_SECRET
+  $ X_CLI_CLIENT_SECRET=YOUR_CLIENT_SECRET x-cli auth login
+`);
 
-  auth
+  const status = auth
     .command('status')
     .description('Check current authentication status')
     .action(runCommand(async () => {
@@ -63,8 +75,13 @@ export function makeAuthCommand(): Command {
         has_refresh_token: Boolean(tokens.refreshToken),
       };
     }));
+  status.addHelpText('after', `
+Examples:
+  $ x-cli auth status
+  $ x-cli --format json auth status
+`);
 
-  auth
+  const logout = auth
     .command('logout')
     .description('Remove stored credentials')
     .action(runCommand(async () => {
@@ -76,6 +93,11 @@ export function makeAuthCommand(): Command {
         ],
       };
     }));
+  logout.addHelpText('after', `
+Examples:
+  $ x-cli auth logout
+  $ x-cli auth login
+`);
 
   return auth;
 }

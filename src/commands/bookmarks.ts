@@ -107,6 +107,12 @@ export function makeBookmarksCommand(): Command {
         });
       }
     }));
+  bookmarks.addHelpText('after', `
+Examples:
+  $ x-cli bookmarks
+  $ x-cli bookmarks --limit 50
+  $ x-cli bookmarks --all --full
+`);
 
   return bookmarks;
 }

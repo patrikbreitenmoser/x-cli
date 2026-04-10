@@ -66,6 +66,12 @@ export function makeUserCommand(): Command {
         });
       }
     }));
+  user.addHelpText('after', `
+Examples:
+  $ x-cli user elonmusk
+  $ x-cli user alice bob
+  $ x-cli user alice --full
+`);
 
   return user;
 }

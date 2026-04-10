@@ -4,8 +4,14 @@ import { runCommand } from '../lib/output.js';
 
 export function makeFollowsCommand(): Command {
   const follows = new Command('follows').description('Manage your follow list');
+  follows.addHelpText('after', `
+Examples:
+  $ x-cli follows add alice bob naval
+  $ x-cli follows list
+  $ x-cli follows remove bob
+`);
 
-  follows
+  const add = follows
     .command('add')
     .description('Add accounts to follow list')
     .argument('<usernames...>', 'usernames to add')
@@ -22,8 +28,13 @@ export function makeFollowsCommand(): Command {
         ],
       };
     }));
+  add.addHelpText('after', `
+Examples:
+  $ x-cli follows add alice bob naval
+  $ x-cli follows add elonmusk
+`);
 
-  follows
+  const remove = follows
     .command('remove')
     .description('Remove accounts from follow list')
     .argument('<usernames...>', 'usernames to remove')
@@ -39,8 +50,13 @@ export function makeFollowsCommand(): Command {
         ],
       };
     }));
+  remove.addHelpText('after', `
+Examples:
+  $ x-cli follows remove bob
+  $ x-cli follows remove alice bob
+`);
 
-  follows
+  const list = follows
     .command('list')
     .description('Show current follow list')
     .action(runCommand(async () => {
@@ -53,6 +69,11 @@ export function makeFollowsCommand(): Command {
           : ['Run `x-cli tweets` to fetch new tweets for the current follow list.'],
       };
     }));
+  list.addHelpText('after', `
+Examples:
+  $ x-cli follows list
+  $ x-cli --format json follows list
+`);
 
   return follows;
 }

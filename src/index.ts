@@ -57,6 +57,7 @@ program.addCommand(makeHooksCommand());
 applyCommanderDefaults(program);
 
 setOutputFormat(detectRequestedFormat(process.argv.slice(2)));
+await maybeInstallManagedHooks(process.argv.slice(2));
 
 try {
   validateCliArgs(process.argv.slice(2));
@@ -88,25 +89,53 @@ if (process.exitCode && process.exitCode !== 0) {
 function makeHooksCommand(): Command {
   const hooks = new Command('hooks').description('Manage ambient session hooks');
 
+  hooks.addHelpText('after', `
+Examples:
+  $ x-cli hooks status
+  $ x-cli hooks install
+  $ x-cli hooks uninstall
+`);
+
   hooks
     .command('install')
     .description('Install or repair Codex and Claude session-start hooks')
+    .addHelpText('after', `
+Examples:
+  $ x-cli hooks install
+  $ x-cli --format json hooks install
+`)
     .action(runCommand(async () => ensureManagedHooksInstalled()));
 
   hooks
     .command('uninstall')
     .description('Remove managed Codex and Claude session-start hooks')
+    .addHelpText('after', `
+Examples:
+  $ x-cli hooks uninstall
+  $ x-cli hooks status
+`)
     .action(runCommand(async () => uninstallManagedHooks()));
 
   hooks
     .command('status')
     .description('Show the current Codex and Claude hook status')
+    .addHelpText('after', `
+Examples:
+  $ x-cli hooks status
+  $ x-cli --format json hooks status
+`)
     .action(runCommand(async () => getManagedHookStatus()));
 
   hooks
     .command('emit-session-start')
     .description('Emit compact x-cli context for managed session-start hooks')
     .addOption(new Option('--app <app>', 'hook consumer').choices(['cli', 'codex', 'claude']).default('cli'))
+    .addHelpText('after', `
+Examples:
+  $ x-cli hooks emit-session-start
+  $ x-cli hooks emit-session-start --app codex
+  $ x-cli --format json hooks emit-session-start --app claude
+`)
     .action(runCommand(async (options: { app: 'cli' | 'codex' | 'claude' }) => buildHomeOutput({ app: options.app })));
 
   return hooks;
@@ -126,6 +155,35 @@ function detectRequestedFormat(args: string[]): 'toon' | 'json' {
 
 function isHookEmitterInvocation(args: string[]): boolean {
   return args[0] === 'hooks' && args[1] === 'emit-session-start';
+}
+
+function shouldAutoInstallManagedHooks(args: string[]): boolean {
+  const disabled = process.env.X_CLI_DISABLE_AUTO_HOOKS;
+  if (disabled === '1' || disabled === 'true' || disabled === 'yes' || disabled === 'on') {
+    return false;
+  }
+
+  if (isHookEmitterInvocation(args)) {
+    return false;
+  }
+
+  return !(args[0] === 'hooks' && args[1] === 'uninstall');
+}
+
+async function maybeInstallManagedHooks(args: string[]): Promise<void> {
+  if (!shouldAutoInstallManagedHooks(args)) {
+    return;
+  }
+
+  try {
+    await ensureManagedHooksInstalled();
+  } catch (error) {
+    const cliError = ensureCliError(error);
+    if (cliError.diagnostic) {
+      console.error(cliError.diagnostic);
+    }
+    console.error(`x-cli: ${cliError.message}`);
+  }
 }
 
 function applyCommanderDefaults(command: Command): void {

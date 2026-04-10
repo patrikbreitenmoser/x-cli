@@ -257,6 +257,12 @@ export function makeTweetsCommand(): Command {
         });
       }
     }));
+  tweets.addHelpText('after', `
+Examples:
+  $ x-cli tweets elonmusk --limit 10
+  $ x-cli tweets alice bob --since 2026-01-01
+  $ x-cli tweets --no-replies --no-retweets
+`);
 
   return tweets;
 }

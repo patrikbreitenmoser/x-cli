@@ -1,6 +1,6 @@
 {
   "name": "@patrikbreitenmoser/x-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CLI tool for querying the X (Twitter) API v2",
   "type": "module",
   "license": "MIT",
@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "npm run build && node --test dist/**/*.test.js",
+    "test": "npm run build && node --test dist/*.test.js dist/**/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
